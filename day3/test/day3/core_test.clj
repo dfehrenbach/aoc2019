@@ -1,5 +1,5 @@
 (ns day3.core-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest testing is]]
             [day3.core :refer [create-points
                                build-lines
                                manhatten-distance
