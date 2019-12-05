@@ -1,5 +1,5 @@
 (ns day2.core-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest testing is]]
             [day2.core :refer [build-program]]))
 
 (deftest build-program-test

@@ -1,5 +1,5 @@
 (ns day1.core-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest testing is]]
             [day1.core :refer [calculate-fuel
                                solve-modules-weight
                                calculate-recursive-fuel]]))
