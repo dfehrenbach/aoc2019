@@ -62,26 +62,75 @@
 
 (def !distance-to-santa (atom 0))
 
-(defn draw-map-rec [system visited current-planet distance]
+(defn draw-graph-rec [system visited current-planet distance]
   (println visited current-planet distance)
   (if (= current-planet :SAN)
     (throw (swap! !distance-to-santa (fn [_] (- distance 2))))
     (doseq [new-planet (remove visited (get-in system [current-planet :nearby-planets]))]
-      (draw-map-rec
+      (draw-graph-rec
        system
        (conj visited current-planet)
        new-planet
        (inc distance)))))
 
-(defn draw-map [system]
-  (draw-map-rec system #{} :YOU 0)) ;; Use #{set} to enable (remove visited ...) 
+(defn draw-graph [system]
+  (draw-graph-rec system #{} :YOU 0)) ;; Use #{set} to enable (remove visited ...) 
 
 
 (comment
-  (draw-map (travel-system (construct-map test-input)))
+  (draw-graph (travel-system (construct-map test-input)))
   (deref !distance-to-santa)
   ;; => 4
 
-  (draw-map (travel-system (construct-map problem-input)))
+  (draw-graph (travel-system (construct-map problem-input)))
   (deref !distance-to-santa))
+  ;; => 388
+
+
+; REHASH of Parts 1 and 2 (Alternate approach)
+
+(defn format-input [input]
+  (->> input
+       str/split-lines
+       (map #(str/split % #"\)"))))
+
+(defn orbiteer->orbited [orbit-pairs]
+  (->> orbit-pairs
+       (map (fn [[orbited orbiteer]] {orbiteer orbited}))
+       (apply merge)))
+
+(defn get-path-to-com [orbit-map current-planet]
+  (when current-planet
+    (cons current-planet
+          (get-path-to-com orbit-map (orbit-map current-planet)))))
+
+(defn sum-distances-from-com [input]
+  (let [orbit-map (orbiteer->orbited (format-input input))]
+    (->> (keys orbit-map)
+         (map #(get-path-to-com orbit-map %))
+         (map (comp dec count)) ;; Subtract target from length
+         (reduce +))))
+
+(defn distance-between-planets [input planet1 planet2]
+  (let [orbit-map (orbiteer->orbited (format-input input))]
+    (->> [planet1 planet2]
+         (map #(get-path-to-com orbit-map %))
+         (map set)
+         (apply clojure.data/diff)
+         (take 2) ;; clojure.data/diff gives [#{difference1} #{difference2} {similarities}]
+         (map (comp dec count)) ;; Subtract target from length
+         (reduce +))))
+
+(comment
+  (get-path-to-com (orbiteer->orbited (format-input (slurp "resources/test.txt"))) "YOU")
+  (sum-distances-from-com (slurp "resources/test.txt"))
+  ;; => 54
+
+  (sum-distances-from-com (slurp "resources/input.txt"))
+  ;; => 271151
+
+  (distance-between-planets (slurp "resources/test.txt") "YOU" "SAN")
+  ;; => 4
+
+  (distance-between-planets (slurp "resources/input.txt") "YOU" "SAN"))
   ;; => 388
