@@ -1,6 +1,9 @@
 (ns day9.core
   (:require [clojure.string :as str]
-            [clojure.core.async :as async :refer [chan <!! >!! <! >!]]))
+            [clojure.core.async :as async :refer [chan <!! >!! <! >!]]
+            [postmortem.instrument :as pi]
+            [postmortem.core :as pm]
+            [postmortem.xforms :as px]))
 
 (def root-program (mapv
                    #(Integer/parseInt %)
@@ -31,10 +34,6 @@
       2 (or (get program (+ param relative-base)) (when pos-overflow? 0))
       (or (get program param) (when pos-overflow? 0)))))
 
-(defn spy [args]
-  (prn "SPYING" args)
-  args)
-
 (defn day9-build-program [starting-program inchan outchan]
   (async/go-loop [program starting-program
                   program-index 0
@@ -44,8 +43,6 @@
       [op m1 m2 m3] (opcode-digits op')
       p1 (get-param-value program relative-base m1 p1')
       p2 (get-param-value program relative-base m2 p2')]
-
-      (prn "OP" op "modes" [m1 m2 m3] "params" [p1 p2 p3])
 
       (case op
         1 (recur (assoc program p3 (+ p1 p2))
