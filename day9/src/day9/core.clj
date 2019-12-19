@@ -3,7 +3,7 @@
             [clojure.core.async :as async :refer [chan <!! >!! <! >!]]
             [postmortem.instrument :as pi]
             [postmortem.core :as pm]
-            [postmortem.xforms :as px]))
+            [postmortem.xforms :as xf]))
 
 (def root-program (mapv
                    #(Integer/parseInt %)
@@ -28,22 +28,24 @@
          (map #(Integer/parseInt %)))))
 
 (defn get-param-value [program relative-base mode param]
-  (let [pos-overflow? (<= (count program) param)]
-    (case mode
-      1 param
-      2 (or (get program (+ param relative-base)) (when pos-overflow? 0))
-      (or (get program param) (when pos-overflow? 0)))))
+  (case mode
+    1 param
+    2 (get program (+ param relative-base))
+    (get program param)))
 
 (defn day9-build-program [starting-program inchan outchan]
   (async/go-loop [program starting-program
                   program-index 0
                   relative-base 0]
     (let
-     [[op' p1' p2' p3] (get-block program program-index)
-      [op m1 m2 m3] (opcode-digits op')
-      p1 (get-param-value program relative-base m1 p1')
-      p2 (get-param-value program relative-base m2 p2')]
-
+        [[op' p1' p2' p3'] (get-block program program-index)
+         [op m1 m2 m3]    (opcode-digits op')
+         p1               (get-param-value program relative-base m1 p1')
+         p2               (get-param-value program relative-base m2 p2')
+         p3               (if (= m3 2) (+ relative-base p3') p3')]
+      (pm/dump :penguin (comp
+                         (map (fn [m] (select-keys m [:op' :p1' :p2' :op :m1 :m2 :m3 :p1 :p2 :p3 :program-index :relative-base])))
+                         (xf/take-last 20)))
       (case op
         1 (recur (assoc program p3 (+ p1 p2))
                  (+ 4 program-index)
@@ -53,7 +55,8 @@
                  (+ 4 program-index)
                  relative-base)
 
-        3 (recur (assoc program p1' (async/<! inchan))
+        3 (recur (assoc program (if (= m1 2) (+ relative-base p1') p1')
+                        (async/<! inchan))
                  (+ 2 program-index)
                  relative-base)
 
@@ -88,11 +91,11 @@
         0 (throw "WUT?!")))))
 
 #_(defn main-orchestrator [program input]
-    (let [a-chan (chan (async/sliding-buffer 2))
-          b-chan (chan (async/sliding-buffer 2))
-          c-chan (chan (async/sliding-buffer 2))
-          d-chan (chan (async/sliding-buffer 2))
-          e-chan (chan (async/sliding-buffer 2))
+    (let [a-chan                (chan (async/sliding-buffer 2))
+          b-chan                (chan (async/sliding-buffer 2))
+          c-chan                (chan (async/sliding-buffer 2))
+          d-chan                (chan (async/sliding-buffer 2))
+          e-chan                (chan (async/sliding-buffer 2))
           [in1 in2 in3 in4 in5] input]
 
       (async/put! a-chan in1) (async/put! a-chan 0)
@@ -125,50 +128,30 @@
      (inc (count code-combos))))
 
 (defn run-day9-part1 [program input]
-  (let [inchan (chan 2000)
+  (let [inchan  (chan 2000)
         outchan (chan 2000)]
     (async/put! inchan input)
     (day9-build-program program inchan outchan)
     outchan))
 
 (comment
-  #_(do
-      (let [outputs (try-all-combinations root-program (get-all-permutations 5 10))]
-        (async/<!! (async/timeout 3000))
-        (async/close! outputs)
-        (apply max (async/<!! (async/into [] outputs)))))
-  ;; => 6489132
-  (do
-    (let [outputs (run-day9-part1 (mapify-program [109 1 204 -1 1001 100 1 100 1008 100 16 101 1006 101 0 99]) 1)]
-      (async/<!! (async/timeout 1000))
-      (async/close! outputs)
-      (async/<!! (async/into [] outputs))))
-  ;; => [109N 1N 204N -1N 1001N 100N 1N 100N 1008N 100N 16N 101N 1006N 101N 0N 99N]
+  ;; PART 1
+  (let [outputs (run-day9-part1 mapped-root 1)]
+    (async/<!! (async/timeout 1000))
+    (async/close! outputs)
+    (async/<!! (async/into [] outputs)))
+;; => [3638931938N]
 
-  (do
-    (let [outputs (run-day9-part1 (mapify-program [1102 34915192 34915192 7 4 7 99 0]) 1)]
-      (async/<!! (async/timeout 1000))
-      (async/close! outputs)
-      (async/<!! (async/into [] outputs))))
-  ;; => [1219070632396864N]
+  ;; PART 2
+  (let [outputs (run-day9-part1 mapped-root 2)]
+    (async/<!! (async/timeout 10000))
+    (async/close! outputs)
+    (async/<!! (async/into [] outputs)))
+  ;; => [3638931938N]
 
-  (do
-    (let [outputs (run-day9-part1 (mapify-program [104 1125899906842624 99]) 1)]
-      (async/<!! (async/timeout 1000))
-      (async/close! outputs)
-      (async/<!! (async/into [] outputs))))
-  ;; => [1125899906842624N]
+  (pm/log-for :penguin)
 
-  (do
-    (let [outputs (run-day9-part1 (mapify-program [3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,
-1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
-999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99]) 10)]
-      (async/<!! (async/timeout 1000))
-      (async/close! outputs)
-      (async/<!! (async/into [] outputs))))
+  (pm/reset!)
 
-  (do
-    (let [outputs (run-day9-part1 mapped-root 1)]
-      (async/<!! (async/timeout 1000))
-      (async/close! outputs)
-      (async/<!! (async/into [] outputs)))))
+  0)
+;; => nil
