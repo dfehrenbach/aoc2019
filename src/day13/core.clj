@@ -98,7 +98,8 @@
 
 (def fresh-game-state
   {:game-map     {}
-   :printed-game (mapv vec (make-array Integer/TYPE 41 41))})
+   :printed-game (mapv vec (make-array Integer/TYPE 41 41))
+   :score        0})
 
 (defn ids->pictures [printed-game]
   (map (fn [line]
@@ -110,9 +111,10 @@
 
 (defn update-game [game x y id]
   (pm/spy>> :picture (ids->pictures (:printed-game game)))
-  (-> game
-      (assoc-in [:game-map [x y]] id)
-      (assoc-in [:printed-game y x] id)))
+  (if (= x -1) (assoc game :score y)
+      (-> game
+          (assoc-in [:game-map [x y]] id)
+          (assoc-in [:printed-game y x] id))))
 
 (defn game
   ([in final]
@@ -166,14 +168,14 @@
     (async/close! game-out)
     (let [game-state (last (async/<!! (async/into [] game-out)))]
       (print-game game-state)
-      (print-game (update-game game-state 12N 23N 4N)))))
+      #_(print-game (update-game game-state 12N 23N 4N)))))
 
 (comment
 
   (part1 mapped-root 0)
                                         ; => 420
 
-  (part2 (assoc mapped-root 0 2N) [1 0 0 0 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1])
+  (part2 (assoc mapped-root 0 2N) [1 0 0 0 0])
 
   (pm/logs)
 

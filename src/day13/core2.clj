@@ -50,7 +50,8 @@
         p2                (get-param-value program relative-base m2 p2')
         p3                (if (= m3 2) (+ relative-base p3') p3')]
 
-    (pm/dump :penguin (comp (xf/take-last 90) (map (fn [m] (select-keys m [:op' :p1 :p2 :p3 :program-index])))))
+    (pm/dump :penguin (comp (xf/take-last 10) (map (fn [m] (select-keys m [:op' :p1 :p2 :p3 :program-index])))))
+    (pm/spy>> :computer (xf/take-last 5) computer)
 
     (case op
       1 (-> computer
@@ -61,7 +62,7 @@
             (assoc-in [:program p3] (* p1 p2))
             (assoc :program-index (+ program-index 4)))
 
-      3 (if (pm/spy>> :emp (xf/take-last 90) (empty? inputs)) (assoc computer :waiting true)
+      3 (if (empty? inputs) (assoc computer :waiting true)
             (-> computer
                 (assoc-in [:program (if (= m1 2) (+ relative-base p1') p1')] (first inputs))
                 (assoc :program-index (+ program-index 2))
@@ -111,21 +112,21 @@
   (ids->pictures (:printed-game state)))
 
 (defn update-game [game x y id]
-  (pm/spy>> :picture (ids->pictures (:printed-game game)))
-  (pm/dump :update-game (xf/take-last 10))
-  (if (= x -1) (assoc game :score y)
+  (pm/spy>> :picture (xf/take-last 10) (ids->pictures (:printed-game game)))
+  (pm/dump :update-game (xf/take-last 2))
+  (if (= [x y] [-1 0]) (assoc game :score id)
       (-> game
           (assoc-in [:game-map [x y]] id)
           (assoc-in [:printed-game y x] id))))
 
-(defn run-part12 [starting-program]
+(defn run-part1 [starting-program]
   (loop [program starting-program]
     (if (or (:exitted program) (:waiting program)) program
         (recur (build-program program)))))
 
-(defn part12 [program input]
+(defn part1 [program input]
   (let [starting-program    (assoc (fresh-program program) :inputs (concat [] input))
-        setup-program-state (run-part12 starting-program)
+        setup-program-state (run-part1 starting-program)
         game-instructions   (partition-all 3 (:outputs setup-program-state))
         setup-game          (reduce (fn [acc [x y id]]
                                       (update-game acc x y id))
@@ -140,47 +141,63 @@
           game
           instructions))
 
-(defn get-ball-xposition [game]
-  (first (get (group-by val (:game-map game)) 4)))
+(defn get-ball-position [game]
+  (ffirst (get (group-by val (:game-map game)) 4)))
+
+(defn get-paddle-position [game]
+  (ffirst (get (group-by val (:game-map game)) 3)))
 
 (defn iterate-program-game [program game movement]
   (let [next-program (-> program
                          (assoc :outputs [])
                          (update :inputs conj movement)
-                         run-part12)
+                         (assoc :waiting false)
+                         run-part1)
         instructions (partition-all 3 (:outputs next-program))
         next-game    (build-upon-game game instructions)]
+    (pm/dump :iterate-program-game)
     {:program next-program
      :game    next-game}))
 
+(defn find-paddle-movement [paddle ball future-ball]
+  (let [[px py]   paddle
+        [bx by]   ball
+        [fbx fby] future-ball]
+    (if (and (= px bx) (= py (inc by))) 0
+        (compare fbx px))))
+
 (defn progress-game [program game]
-  (let [current-ball-position (get-ball-xposition game)
-        future-ball           (get-ball-xposition
-                                (:game (iterate-program-game program game 0)))
-        true-movement         (compare future-ball current-ball-position)]
+  (let [current-paddle-position (get-paddle-position game)
+        current-ball-position   (get-ball-position game)
+        future-ball             (get-ball-position
+                                  (:game (iterate-program-game program game 0)))
+        true-movement           (find-paddle-movement current-paddle-position
+                                                      current-ball-position
+                                                      future-ball)]
+    (pm/dump :progress-game)
     (iterate-program-game program game true-movement)))
 
-(defn run-part22 [setup-program setup-game]
+(defn run-part2 [setup-program setup-game]
   (loop [program setup-program
          game    setup-game]
     (let [{:keys [program game] :as data} (progress-game program game)]
       (if (:exitted program) data
           (recur program game)))))
 
-(defn part22 [program input]
+(defn part2 [program input]
   (let [starting-program  (assoc (fresh-program program) :inputs (concat [] input))
-        setup-program     (run-part12 starting-program)
+        setup-program     (run-part1 starting-program)
         game-instructions (partition-all 3 (:outputs setup-program))
         setup-game        (build-upon-game fresh-game-state game-instructions)]
-    (run-part22 setup-program setup-game)
-    #_setup-program
-    #_(print-game setup-game)))
+
+    (run-part2 setup-program setup-game)))
 
 (comment
-  (part12 mapped-root [0])
-                                        ; => 420
+  (part1 mapped-root [0])
+  ;; => 420
 
-  (part22 (assoc mapped-root 0 2N) [])
+  (:score (:game (part2 (assoc mapped-root 0 2N) [])))
+  ;; => 21651N
 
   (pm/logs)
 
