@@ -9,11 +9,11 @@
 (def puzzle-input (slurp "resources/day14/input.txt"))
 
 (defn mapify-ingredient-pair [[amount ingredient]]
-  {(keyword ingredient) (Integer/parseInt amount)})
+  {(keyword ingredient) (bigint (Integer/parseInt amount))})
 
 (defn transform-ingredients [ingredients]
-  (apply merge
-         (map (comp
+(apply merge
+       (map (comp
                 mapify-ingredient-pair
                 #(str/split % #" "))
               ingredients)))
@@ -23,8 +23,10 @@
         ingredients        (str/split ingredients #", ")
         ingredient->amount (transform-ingredients ingredients)]
     (-> reactions
-        (update (keyword result) merge {:amount (Integer/parseInt amount)})
-        (update (keyword result) merge ingredient->amount))))
+        (update (keyword result) merge
+                {:amount (bigint (Integer/parseInt amount))})
+        (update (keyword result) merge
+                ingredient->amount))))
 
 (defn format-input [input]
   (->> input
@@ -80,27 +82,49 @@
 
 (defn breakdown [reactions key required]
   (let [components  (-> reactions key)
-        convertable (int (Math/ceil (/ required (:amount components))))]
+        convertable (bigint (math/ceil (/ required (:amount components))))]
     (zipmap (keys (dissoc components :amount))
             (map (partial * convertable)
                  (vals (dissoc components :amount))))))
 
 
-(defn part1 [input]
+(defn part1 [input fuel]
   (let [reactions       (format-input input)
         sorted-keys     (kahn-sort (get-simple-formulas reactions))
         merge-with-plus (partial merge-with +)]
     (reduce (fn [acc key]
               (-> acc
                   (merge-with-plus
-                    (breakdown reactions key (get acc key 1)))
+                    (breakdown reactions key (get acc key fuel)))
                   (dissoc key)))
             {} (remove #{:ORE} sorted-keys))))
 
-(comment
-  (part1 puzzle-input)
-  ;; => {:ORE 168046}
+(defn part2-binary-search [input]
+  (let [one-fuel-ore  (:ORE (part1 puzzle-input 1))
+        low-estimate  (int (math/floor (/ 1000000000000N one-fuel-ore)))
+        high-estimate (int (math/floor (/ 1200000000000N one-fuel-ore)))]
+    (loop [fuel      (+ low-estimate (int (/ (- high-estimate low-estimate) 2)))
+           lowbound  low-estimate
+           highbound high-estimate]
+      (pm/dump :penguin (comp (map #(select-keys % [:fuel :runcount]))
+                              (xf/take-last 10)))
+      (let [required-ore (:ORE (part1 puzzle-input fuel))]
+        (if (< (math/abs (- required-ore 1000000000000)) one-fuel-ore) fuel
+            (recur (if (< required-ore 1000000000000)
+                     (+ fuel (int (/ (- highbound fuel) 2)))
+                     (- fuel (int (/ (- fuel lowbound) 2))))
+                   (if (< required-ore 1000000000000) fuel lowbound)
+                   (if (< required-ore 1000000000000) highbound fuel)))))))
 
+(comment
+  (part1 puzzle-input 1)
+  ;; => {:ORE 168046N}
+
+  ;; PART2 (Hand binary search)
+  ;; 6972986
+
+  (part2-binary-search puzzle-input)
+  ;; => 6972986
 
   (pm/logs)
 
