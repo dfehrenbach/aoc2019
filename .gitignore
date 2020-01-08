@@ -10,6 +10,7 @@ pom.xml.asc
 .lein-repl-history
 .lein-plugins/
 .lein-failures
+.clj-kondo/
 .nrepl-port
 .cpcache/
 .hgignore
