@@ -15,3 +15,5 @@ pom.xml.asc
 .cpcache/
 .hgignore
 .hg/
+
+src/.DS_Store
