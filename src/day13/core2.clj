@@ -49,10 +49,6 @@
         p1                (get-param-value program relative-base m1 p1')
         p2                (get-param-value program relative-base m2 p2')
         p3                (if (= m3 2) (+ relative-base p3') p3')]
-
-    (pm/dump :penguin (comp (xf/take-last 10) (map (fn [m] (select-keys m [:op' :p1 :p2 :p3 :program-index])))))
-    (pm/spy>> :computer (xf/take-last 5) computer)
-
     (case op
       1 (-> computer
             (assoc-in [:program p3] (+ p1 p2))
@@ -112,8 +108,6 @@
   (ids->pictures (:printed-game state)))
 
 (defn update-game [game x y id]
-  (pm/spy>> :picture (xf/take-last 10) (ids->pictures (:printed-game game)))
-  (pm/dump :update-game (xf/take-last 2))
   (if (= [x y] [-1 0]) (assoc game :score id)
       (-> game
           (assoc-in [:game-map [x y]] id)
@@ -155,7 +149,6 @@
                          run-part1)
         instructions (partition-all 3 (:outputs next-program))
         next-game    (build-upon-game game instructions)]
-    (pm/dump :iterate-program-game)
     {:program next-program
      :game    next-game}))
 
@@ -174,7 +167,6 @@
         true-movement           (find-paddle-movement current-paddle-position
                                                       current-ball-position
                                                       future-ball)]
-    (pm/dump :progress-game)
     (iterate-program-game program game true-movement)))
 
 (defn run-part2 [setup-program setup-game]
