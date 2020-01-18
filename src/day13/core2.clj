@@ -113,14 +113,13 @@
           (assoc-in [:game-map [x y]] id)
           (assoc-in [:printed-game y x] id))))
 
-(defn run-part1 [starting-program]
-  (loop [program starting-program]
-    (if (or (:exitted program) (:waiting program)) program
-        (recur (build-program program)))))
+(defn run-program [program]
+  (if (or (:exitted program) (:waiting program)) program
+      (recur (build-program program))))
 
 (defn part1 [program input]
   (let [starting-program    (assoc (fresh-program program) :inputs (concat [] input))
-        setup-program-state (run-part1 starting-program)
+        setup-program-state (run-program starting-program)
         game-instructions   (partition-all 3 (:outputs setup-program-state))
         setup-game          (reduce (fn [acc [x y id]]
                                       (update-game acc x y id))
@@ -146,7 +145,7 @@
                          (assoc :outputs [])
                          (update :inputs conj movement)
                          (assoc :waiting false)
-                         run-part1)
+                         run-program)
         instructions (partition-all 3 (:outputs next-program))
         next-game    (build-upon-game game instructions)]
     {:program next-program
@@ -178,7 +177,7 @@
 
 (defn part2 [program input]
   (let [starting-program  (assoc (fresh-program program) :inputs (concat [] input))
-        setup-program     (run-part1 starting-program)
+        setup-program     (run-program starting-program)
         game-instructions (partition-all 3 (:outputs setup-program))
         setup-game        (build-upon-game fresh-game-state game-instructions)]
 

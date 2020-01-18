@@ -6,17 +6,13 @@
             [day13.core2 :as day13]))
 
 (def root-program (mapv
-                   #(Long/parseLong %)
-                   (str/split (slurp "resources/day15/input.txt") #",|\r\n|\n")))
+                    #(Long/parseLong %)
+                    (str/split (slurp "resources/day15/input.txt") #",|\r\n|\n")))
 
 (defn mapify-program [program]
   (reduce (fn [acc v] (assoc acc (count acc) (bigint v))) {} program))
 
 (def mapped-root (mapify-program root-program))
-
-(defn run-program [program]
-  (if (or (:exitted program) (:waiting program)) program
-      (recur (day13/build-program program))))
 
 (def fresh-environment
   {:bot-position {:x 0 :y 0}
@@ -27,13 +23,11 @@
   (case [existing-val new-val]
     [nil 0]         :wall
     [nil 1]         :unexplored
-    [nil 2]         :oxygen
+    [nil 2]         :OXYGEN
     [:wall 0]       :wall
-    [:wall 1]       :unexplored
-    [:wall 2]       :oxygen
     [:nothing 1]    :nothing
     [:unexplored 1] :nothing
-    [:oxygen 2]     :oxygen
+    [:OXYGEN 2]     :OXYGEN
     :error))
 
 (defn update-direction [env location val]
@@ -50,7 +44,11 @@
         (update-direction [(inc bot-x) bot-y] east))))
 
 (defn go-direction [program direction]
-  (run-program (assoc program :inputs [direction])))
+  (pm/dump :going-direction)
+  (pm/spy>> :went-to (day13/run-program
+                       (-> program
+                           (update :inputs conj direction)
+                           (assoc :waiting false)))))
 
 (defn try-all-directions [program env]
   (let [surrounding-area {:north (last (:outputs (go-direction program 1)))
@@ -68,7 +66,7 @@
                              :west  (get-in env [:map [(dec bot-x) bot-y]] :unexplored)
                              :east  (get-in env [:map [(inc bot-x) bot-y]] :unexplored)}
         unexplored          (filter (comp (partial = :unexplored) val) surrounding-area)]
-    (pm/dump :elephant)
+    (pm/dump :unexplored-directions)
     (map (comp direction->code key) unexplored)))
 
 (defn move-bot [env direction]
@@ -89,46 +87,32 @@
       (throw "Invalid direciton sent to move-bot"))))
 
 (defn found-oxygen? [env]
-  (some #{:oxygen} (vals (:map env))))
+  (some #{:OXYGEN} (vals (:map env))))
 
 (defn run-part1 [program env]
+  (pm/spy>> :program program)
   (let [updated-env (try-all-directions program env)]
     (pm/spy>> :pupper updated-env)
     (pm/spy>> :oxy? (some? (found-oxygen? updated-env)))
     (pm/spy>> :unexplored? [(:bot-position updated-env) (unexplored-directions updated-env)])
-    (if (some? (found-oxygen? updated-env))
-      {:program program :env env}
-      (for [direction (unexplored-directions updated-env)]
-        (run-part1 (go-direction program direction)
-                   (move-bot updated-env direction))))))
+    (if (some? (found-oxygen? updated-env)) {:program program :env updated-env}
+        (flatten (for [direction (unexplored-directions updated-env)]
+                   (run-part1 (go-direction program direction)
+                              (move-bot updated-env direction)))))))
 
-;; Try all the directions
-;; Discern what directions are available to go
-;; for each one, go repeat sending along the env and the program
-
-(defn penguin [program]
-  (loop [program program
-         count   0]
-    (if (or
-          (= (last (:outputs program)) 0)
-          (= count 5000)) count
-        (recur (go-direction program 4)
-               (inc count)))))
-
-(defn part1 [program input]
-  (let [starting-program (assoc (day13/fresh-program program) :inputs (concat [] input))
+(defn part1 [program]
+  (let [starting-program (day13/fresh-program program)
         starting-env     fresh-environment]
-    #_(unexplored-directions (try-all-directions starting-program starting-env))
-    #_(unexplored-directions starting-env)
-    (run-part1 starting-program starting-env)
-    #_(penguin starting-program)
-    #_(:outputs (-> starting-program
-                    (go-direction 1)
-                    (go-direction 3)
-                    (go-direction 2)))))
+    (first (run-part1 starting-program starting-env))))
 
 (comment
-  (part1 mapped-root [])
+  (filter (fn [[pos val]] (= val :OXYGEN))
+          (:map (:env (part1 mapped-root))))
+  ;; => ([[12 -14] :OXYGEN])
+
+  ;; Increment because oxygen is NEXT to the robot
+  (-> (part1 mapped-root) :env :path count inc)
+  ;; => 222
 
   (pm/logs)
 
