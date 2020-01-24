@@ -44,11 +44,10 @@
         (update-direction [(inc bot-x) bot-y] east))))
 
 (defn go-direction [program direction]
-  (pm/dump :going-direction)
-  (pm/spy>> :went-to (day13/run-program
-                       (-> program
-                           (update :inputs conj direction)
-                           (assoc :waiting false)))))
+  (day13/run-program
+    (-> program
+        (update :inputs conj direction)
+        (assoc :waiting false))))
 
 (defn try-all-directions [program env]
   (let [surrounding-area {:north (last (:outputs (go-direction program 1)))
@@ -65,8 +64,8 @@
                              :south (get-in env [:map [bot-x (dec bot-y)]] :unexplored)
                              :west  (get-in env [:map [(dec bot-x) bot-y]] :unexplored)
                              :east  (get-in env [:map [(inc bot-x) bot-y]] :unexplored)}
-        unexplored          (filter (comp (partial = :unexplored) val) surrounding-area)]
-    (pm/dump :unexplored-directions)
+        unexplored-or-oxy   (fn [[_pos v]] (or (= v :unexplored) (= v :OXYGEN)))
+        unexplored          (filter unexplored-or-oxy surrounding-area)]
     (map (comp direction->code key) unexplored)))
 
 (defn move-bot [env direction]
@@ -86,33 +85,63 @@
             (update :path conj [(inc bot-x) bot-y]))
       (throw "Invalid direciton sent to move-bot"))))
 
+(defn find-oxygen-direction [env oxygen-pos]
+  (let [{bot-x :x bot-y :y} (:bot-position env)
+        [oxy-x oxy-y]       (val oxygen-pos)]
+    (case [(compare oxy-x bot-x) (compare oxy-y bot-y)]
+      [0 1]  1
+      [0 -1] 2
+      [-1 0] 3
+      [1 0]  4)))
+
 (defn found-oxygen? [env]
-  (some #{:OXYGEN} (vals (:map env))))
+  (some #(when (= :OXYGEN (val %)) %) (:map env)))
 
 (defn run-part1 [program env]
-  (pm/spy>> :program program)
-  (let [updated-env (try-all-directions program env)]
-    (pm/spy>> :pupper updated-env)
-    (pm/spy>> :oxy? (some? (found-oxygen? updated-env)))
-    (pm/spy>> :unexplored? [(:bot-position updated-env) (unexplored-directions updated-env)])
-    (if (some? (found-oxygen? updated-env)) {:program program :env updated-env}
+  (if (some? (found-oxygen? env)) {:program program :env env}
+      (let [updated-env (try-all-directions program env)]
         (flatten (for [direction (unexplored-directions updated-env)]
                    (run-part1 (go-direction program direction)
                               (move-bot updated-env direction)))))))
 
-(defn part1 [program]
-  (let [starting-program (day13/fresh-program program)
+(defn part1 [input]
+  (let [starting-program (day13/fresh-program input)
         starting-env     fresh-environment]
     (first (run-part1 starting-program starting-env))))
 
-(comment
-  (filter (fn [[pos val]] (= val :OXYGEN))
-          (:map (:env (part1 mapped-root))))
-  ;; => ([[12 -14] :OXYGEN])
+(defn run-part2 [program env]
+  (let [updated-env (try-all-directions program env)]
+    (if (empty? (unexplored-directions updated-env)) (count (:path env))
+        (flatten (for [direction (unexplored-directions updated-env)]
+                   (run-part2 (go-direction program direction)
+                              (move-bot updated-env direction)))))))
 
-  ;; Increment because oxygen is NEXT to the robot
-  (-> (part1 mapped-root) :env :path count inc)
+(defn refresh-env [env]
+  (-> env
+      (assoc :path [])
+      (assoc :map
+             (zipmap (keys (:map env))
+                     (map #(case %
+                             :wall       :wall
+                             :OXYGEN     :nothing
+                             :unexplored nil
+                             :nothing    nil
+                             :nil)
+                          (vals (:map env)))))))
+
+(defn part2 [input]
+  (let [starting-program (day13/fresh-program input)
+        starting-env     fresh-environment
+        {program :program
+         env     :env}   (first (run-part1 starting-program starting-env))]
+    (run-part2 program (refresh-env env))))
+
+(comment
+  (-> (part1 mapped-root) :env :path count)
   ;; => 222
+
+  (apply max (part2 mapped-root))
+  ;; => 394
 
   (pm/logs)
 
