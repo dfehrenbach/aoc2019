@@ -7,4 +7,4 @@
                  [org.clojure/core.async "0.6.532"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [postmortem "0.1.0"]]
-  :repl-options {:init-ns day15.core})
+  :repl-options {:init-ns day16.core})
