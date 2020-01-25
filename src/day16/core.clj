@@ -37,21 +37,31 @@
        (iterate run-phase)
        ((fn [in] (nth in num-phases)))))
 
+(defn run-phase2 [list]
+  (reductions (fn [a b] (rem (+ a b) 10)) list))
+
+(defn get-offset [list]
+  (->> list
+       (take 7)
+       (str/join)
+       (Integer/parseInt)))
+
+(defn part2 [input num-phases]
+  (let [in     (format-input input)
+        offset (get-offset in)
+        whole  (apply concat (repeat 10000 in))]
+    (->> whole
+         (drop offset)
+         reverse
+         (iterate run-phase2)
+         ((fn [in] (nth in num-phases)))
+         reverse)))
+
 (comment
   (take 8 (part1 puzzle-input 100))
   ;; => (7 4 3 6 9 0 3 3)
 
-  (->> puzzle-input
-       format-input
-       count
-       (* 10000))
-  ;; => 6500000 -- size of next input
+  (take 8 (part2 puzzle-input 100))
+  ;; => (1 9 9 0 3 8 6 4)
 
-  (->> puzzle-input
-       format-input
-       (take 7)
-       (str/join)
-       (Integer/parseInt))
-  ;; => 5976733 -- offset
   0)
-
