@@ -119,82 +119,61 @@
                 (subseq instruction-group instructions))
               (drop 1 (reductions conj [] instructions))))
 
-(defn can-remove-routines? [instructions routines]
+(defn can-remove-routines?
   "Removes routines it's provided from start of instructions
    If it can't, then it returns what was left to go. Can abuse this to trim
    routines that we're attempting from the start!"
-  (if (empty? instructions) true
-      (let [[a b c] (reverse (sort-by count routines))]
-        (cond
-          (= a (take (count a) instructions))
-          (recur (drop (count a) instructions) routines)
-          (= b (take (count b) instructions))
-          (recur (drop (count b) instructions) routines)
-          (= c (take (count c) instructions))
-          (recur (drop (count c) instructions) routines)
-          :else instructions))))
+  ([instructions routines]
+   (can-remove-routines? [] instructions routines))
+  ([main instructions routines]
+   (let [[a b c] (reverse (sort-by count routines))]
+     (if (empty? instructions) {:main main :a a :b b :c c}
+         (cond
+           (= a (take (count a) instructions))
+           (recur (conj main \A) (drop (count a) instructions) routines)
+           (= b (take (count b) instructions))
+           (recur (conj main \B) (drop (count b) instructions) routines)
+           (= c (take (count c) instructions))
+           (recur (conj main \C) (drop (count c) instructions) routines)
+           :else instructions)))))
 
 (defn define-subroutines [instructions]
-  (filter #(true? (:complete %))
-          (flatten
-            (for [a-routine (find-subroutine instructions)
-                  c-routine (map reverse (find-subroutine (reverse instructions)))]
-              (let [stripped-instructions (can-remove-routines?
-                                            instructions [a-routine c-routine])]
-                (for [b-routine (find-subroutine stripped-instructions)]
-                  {:complete (can-remove-routines?
-                               instructions [a-routine b-routine c-routine])
-                   :routines [a-routine b-routine c-routine]}))))))
+  (first (filter :main
+                 (flatten
+                   (for [a-routine (find-subroutine
+                                     instructions)
+                         b-routine (find-subroutine
+                                     (can-remove-routines? instructions [a-routine]))
+                         c-routine (find-subroutine
+                                     (can-remove-routines? instructions [a-routine b-routine]))]
+                     (can-remove-routines?
+                       instructions [a-routine b-routine c-routine]))))))
 
-(defn find-all-sequences [main instructions routines]
-  (let [[a b c] (reverse (sort-by count routines))]
-    (if (empty? instructions) {:main main :a a :b b :c c}
-        (cond
-          (= a (take (count a) instructions))
-          (recur (conj main \A) (drop (count a) instructions) routines)
-          (= b (take (count b) instructions))
-          (recur (conj main \B) (drop (count b) instructions) routines)
-          (= c (take (count c) instructions))
-          (recur (conj main \C) (drop (count c) instructions) routines)))))
-
-(defn codify-subroutine [routine]
-  (let [stringified-instructions (map (fn [instruction] (str/join (map str instruction))) routine)
-        char-code-array          (vec (map int (seq (str/join "," stringified-instructions))))]
-    (conj char-code-array 10)))
-
-(defn codify-mainroutine [routine]
-  (conj (vec (map int (interpose \, routine))) 10))
-
+(defn codify-routine [routine]
+  (conj (mapv int (seq (str/join \, (flatten routine)))) 10))
 
 (defn part2 [input]
-  (let [starting-program     (day13/fresh-program input)
-        mapped-scaffold      (build-scaffold (day13/run-program starting-program))
-        starting-bot         (find-bot mapped-scaffold)
-        path-instructions    (partition 2 (:instructions (run-part2 mapped-scaffold starting-bot)))
-        {routines :routines} (first (define-subroutines path-instructions))
+  (let [starting-program  (day13/fresh-program input)
+        mapped-scaffold   (build-scaffold (day13/run-program starting-program))
+        starting-bot      (find-bot mapped-scaffold)
+        path-instructions (partition 2 (:instructions (run-part2 mapped-scaffold starting-bot)))
         {main :main
          a    :a
          b    :b
-         c    :c}            (find-all-sequences [] path-instructions routines)
-        bot-input            (concat (vec (codify-mainroutine main))
-                                     (vec (codify-subroutine a))
-                                     (vec (codify-subroutine b))
-                                     (vec (codify-subroutine c))
-                                     [(int \y) 10])
-        cleaning-program     (-> starting-program
-                                 (assoc-in [:program 0] 2)
-                                 (assoc :inputs bot-input))
-        cleaned              (day13/run-program cleaning-program)]
-    cleaned))
-
-
+         c    :c}         (define-subroutines path-instructions)
+        bot-input         (mapcat codify-routine [main a b c [\n]])
+        cleaning-program  (-> starting-program
+                              (assoc-in [:program 0] 2)
+                              (assoc :inputs bot-input))]
+    (day13/run-program cleaning-program)))
 
 (comment
 
   (part1 mapped-root)
   ;; => 2788
 
-  (part2 mapped-root)
+  (last (:outputs (part2 mapped-root)))
+  ;; => 761085N
 
   (pm/logs)
 
