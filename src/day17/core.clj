@@ -114,25 +114,80 @@
 (defn subseq [a b]
   (some #{a} (drop 1 (partition (count a) 1 b))))
 
-(drop 1 (reductions conj [] [1 2 3 4 5]))
-
 (defn find-subroutine [instructions]
   (take-while (fn [instruction-group]
                 (subseq instruction-group instructions))
               (drop 1 (reductions conj [] instructions))))
 
-(defn part2 [input]
-  (let [starting-program  (day13/fresh-program input)
-        mapped-scaffold   (build-scaffold (day13/run-program starting-program))
-        starting-bot      (find-bot mapped-scaffold)
-        path-instructions (partition 2 (:instructions (run-part2 mapped-scaffold starting-bot)))]
-    {:full    path-instructions
-     :working (filter #(< 1 (val %))(frequencies (partition 3 path-instructions)))
-     :sub     (find-subroutine path-instructions)}
+(defn can-remove-routines? [instructions routines]
+  "Removes routines it's provided from start of instructions
+   If it can't, then it returns what was left to go. Can abuse this to trim
+   routines that we're attempting from the start!"
+  (if (empty? instructions) true
+      (let [[a b c] (reverse (sort-by count routines))]
+        (cond
+          (= a (take (count a) instructions))
+          (recur (drop (count a) instructions) routines)
+          (= b (take (count b) instructions))
+          (recur (drop (count b) instructions) routines)
+          (= c (take (count c) instructions))
+          (recur (drop (count c) instructions) routines)
+          :else instructions))))
 
-    #_(->> starting-bot (turn-bot mapped-scaffold) (move-bot mapped-scaffold))
-    #_[(turn-bot mapped-scaffold starting-bot)
-       (move-bot mapped-scaffold (turn-bot mapped-scaffold starting-bot))]))
+(defn define-subroutines [instructions]
+  (filter #(true? (:complete %))
+          (flatten
+            (for [a-routine (find-subroutine instructions)
+                  c-routine (map reverse (find-subroutine (reverse instructions)))]
+              (let [stripped-instructions (can-remove-routines?
+                                            instructions [a-routine c-routine])]
+                (for [b-routine (find-subroutine stripped-instructions)]
+                  {:complete (can-remove-routines?
+                               instructions [a-routine b-routine c-routine])
+                   :routines [a-routine b-routine c-routine]}))))))
+
+(defn find-all-sequences [main instructions routines]
+  (let [[a b c] (reverse (sort-by count routines))]
+    (if (empty? instructions) {:main main :a a :b b :c c}
+        (cond
+          (= a (take (count a) instructions))
+          (recur (conj main \A) (drop (count a) instructions) routines)
+          (= b (take (count b) instructions))
+          (recur (conj main \B) (drop (count b) instructions) routines)
+          (= c (take (count c) instructions))
+          (recur (conj main \C) (drop (count c) instructions) routines)))))
+
+(defn codify-subroutine [routine]
+  (let [stringified-instructions (map (fn [instruction] (str/join (map str instruction))) routine)
+        char-code-array          (vec (map int (seq (str/join "," stringified-instructions))))]
+    (conj char-code-array 10)))
+
+(defn codify-mainroutine [routine]
+  (conj (vec (map int (interpose \, routine))) 10))
+
+
+(defn part2 [input]
+  (let [starting-program     (day13/fresh-program input)
+        mapped-scaffold      (build-scaffold (day13/run-program starting-program))
+        starting-bot         (find-bot mapped-scaffold)
+        path-instructions    (partition 2 (:instructions (run-part2 mapped-scaffold starting-bot)))
+        {routines :routines} (first (define-subroutines path-instructions))
+        {main :main
+         a    :a
+         b    :b
+         c    :c}            (find-all-sequences [] path-instructions routines)
+        bot-input            (concat (vec (codify-mainroutine main))
+                                     (vec (codify-subroutine a))
+                                     (vec (codify-subroutine b))
+                                     (vec (codify-subroutine c))
+                                     [(int \y) 10])
+        cleaning-program     (-> starting-program
+                                 (assoc-in [:program 0] 2)
+                                 (assoc :inputs bot-input))
+        cleaned              (day13/run-program cleaning-program)]
+    cleaned))
+
+
 
 (comment
 
@@ -145,13 +200,4 @@
 
   (pm/reset!)
 
-  (def fresh-environment
-    {:bot-position {:x 0 :y 0}
-     :map          {[0 0] :nothing}
-     :path         []})
-
-  (defn go-direction [program direction]
-    (day13/run-program
-      (-> program
-          (update :inputs conj direction)
-          (assoc :waiting false)))))
+  0)
